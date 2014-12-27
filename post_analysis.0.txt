@@ -1,0 +1,41 @@
+Deviations From Previous Analysis
+=================================
+There is no "-l" option anymore. It's always as if "-l" was specified now.
+Specifying a width and height now indicates to the program that you'd like it
+to use at most that much width and/or height, but it if I needs to, it'll go
+over it. For example, maybe you've specified a suggested minimum height of 300,
+but you have a 340 pixels image. In this case, the program will go overboard on
+the height.
+
+There is no BMP output anymore. BMP images don't support transparency, and it's
+highly desirable that the output image keeps transparency information from the
+input images. Now, a PNG output is used. The "-o" option now specifies a PNG
+output.
+
+As soon as I've found I needed something with transparency, I changed
+pre_analysis.txt to say png instead of bmp, but I've corrected that already.
+My original thoughts involved BMP output through the SDL_SaveBMP function.
+
+I predirected a RegionsCVSOutput module. This wasn't really used. That module
+was supposed to output CSV through a SDL RWOps structure. What was actually
+done is a function in the Main module which outputs the CSV result to a file.
+Much simpler, and just as good.
+
+BMP Output
+==========
+BMP output seems useful still. It should be easy to do it. Binary transparency
+can be faked through the use of a background color that doesn't appear in any
+input image. That background color would be another output of the program.
+
+PNG Output
+==========
+I don't understand about PNG images processing. The code in xPNG.c and xPNG.h
+was mostly a copy/paste from the web. I tweaked with the code a little so it
+could do better error reporting, but that's about it.
+
+More Feature
+============
+A "-s" option, which should tell the program to attempt to produce square-ish
+output images. If the suggested maximum width/height weren't violated, the
+output image should grow attempting to keep the difference between width and
+height close to 0.

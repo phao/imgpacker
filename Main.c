@@ -55,6 +55,8 @@ cleanup(void) {
   imgs = 0;
   bp2d.regions = 0;
   bp2d.img = 0;
+  IMG_Quit();
+  SDL_Quit();
 }
 
 static char *
@@ -171,19 +173,22 @@ build_cfg(int argc, char **argv) {
 static void
 load_imgs(void) {
   assert(num_imgs > 0);
-  assert(imgs);
   assert(files);
 
-  int i;
+  errno = 0;
+  imgs = malloc(num_imgs * sizeof (struct NamedSurface));
+  if (!imgs) {
+    err_exit("libc: %s.", strerror(errno));
+  }
 
-  for (i = 0; i < num_imgs; loaded = i, i++) {
-    imgs[i].surf = IMG_Load(files[i]);
-    if (!imgs[i].surf) {
+  for (loaded = 0; loaded < num_imgs; loaded++) {
+    imgs[loaded].surf = IMG_Load(files[loaded]);
+    if (!imgs[loaded].surf) {
       err_exit("SDL2_image: %s.", IMG_GetError());
     }
-    imgs[i].name = dup_adjust_name(files[i]);
+    imgs[loaded].name = dup_adjust_name(files[loaded]);
     if (CONFIG_IS_VERBOSE(cfg)) {
-      fprintf(stderr, "Loaded %s.\n", files[i]);
+      fprintf(stderr, "Loaded %s.\n", files[loaded]);
     }
   }
 }
@@ -200,26 +205,34 @@ init(void) {
 }
 
 static void
+regions_csv_output(void) {
+  errno = 0;
+  FILE *csvf = fopen(cfg.csv_out, "w");
+  if (!csvf) {
+    err_exit("libc: %s.", strerror(errno));
+  }
+  for (int i = 0; i < num_imgs; i++) {
+    struct RegionInfo *reg = bp2d.regions+i;
+    fprintf(csvf, "%s,%d,%d,%d,%d\n", reg->img->name, reg->rect.x,
+      reg->rect.y, reg->rect.w, reg->rect.h);
+  }
+  fclose(csvf);
+}
+
+static void
 output(void) {
-  SDL_SaveBMP(bp2d.img, "foo.bmp");
   int res = xpng_save_surface(cfg.png_out, bp2d.img);
   if (res < 0) {
     err_exit("xPNG: %s.", xpng_strerror(res));
   }
-  // regions_csv_output(cfg.csv_out, bp2d.regions, num_imgs);
+  regions_csv_output();
 }
 
 int
 main(int argc, char *argv[]) {
   init();
   build_cfg(argc, argv);
-  errno = 0;
-  imgs = malloc(num_imgs * sizeof (struct NamedSurface));
-  if (!imgs) {
-    err_exit("libc: %s.", strerror(errno));
-  }
   load_imgs();
-  errno = 0;
   bp2d = bin_pack_2d(imgs, num_imgs, cfg.w, cfg.h);
   if (bp2d.attempt < 0) {
     err_exit("BinPack2D: %s.", bp2d_strerror(bp2d.attempt));

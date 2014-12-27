@@ -1,10 +1,10 @@
 This program should be a command line utility which takes a bunch of images
-as command line parameters and packs them together into a single image output.
-A PNG is output. Together with the image output, there should be an output
-file describing the PNG. For each input image, there should be an entry in this
-output file telling where that input image is located in the output PNG image.
+as command line parameters and packs them together into a single image output:
+a BMP is output. Together with the image output, there should be an output
+file describing the BMP. For each input image, there should be an entry in this
+output file telling where that input image is located in the output BMP image.
 
-Output image can only be in PNG.
+Output image can only be in BMP.
 
 Output file describing the output image's sub regions (the input images) will
 be in CSV. Converting CSV into something else should be trivial.
@@ -23,21 +23,21 @@ file name:
 
   - Stripped out of extensions if it has any.
   - Anything non [A-Za-z0-9_] is converted into _ (if input file name is
-  foo/bar2.png, then csv name is foo_bar2). This is to make it easier to use
+  foo/bar2.bmp, then csv name is foo_bar2). This is to make it easier to use
   this in source code (it's often easy to convert a CSV text into some sort of
   struct/array value).
 
 Command line options:
 
   -w WIDTH
-    Maximum width (pixels) for the resulting PNG.
+    Maximum width (pixels) for the resulting BMP.
   -h HEIGHT
-    Maximum height (pixels) for the resulting PNG.
+    Maximum height (pixels) for the resulting BMP.
   -r REPLACEMENT
     Character to be used instead of the default '_' to replace non C-identifier
     characters.
-  -o PNG_OUTPUT_FILE_NAME
-    The name of the PNG output file (default is out.png).
+  -o BMP_OUTPUT_FILE_NAME
+    The name of the BMP output file (default is out.bmp).
   -c CSV_OUTPUT_FILE_NAME
     The name of the CSV output file (default is out.csv).
   -l
@@ -47,8 +47,8 @@ Command line options:
 As soon as something not recognized as a command line option appears, no more
 command line options can appear. So they should come first.
 
-  # This will attempt to load file: 'a.png' and '-l'.
-  imgpacker -w 1024 a.png -l
+  # This will attempt to load file: 'a.bmp' and '-l'.
+  imgpacker -w 1024 a.bmp -l
 
 Issues
 ======

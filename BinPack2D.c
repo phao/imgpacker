@@ -229,13 +229,12 @@ grow_insert(struct NamedSurface *img,
 
   assert(can_grow_down || can_grow_right);
 
-  const int should_grow_down = can_grow_down && (limit_w <= root_w ||
-    root_w > root_h);
-  const int should_grow_right = can_grow_right && (limit_h <= root_h ||
-    root_h > root_w);
+  const int should_grow_down = can_grow_down && (limit_w <= root_w + img_w);
+  const int should_grow_right = can_grow_right && (limit_h <= root_h + img_h);
 
-  return_if(should_grow_down, grow_down_insert(img, region, head));
   return_if(should_grow_right, grow_right_insert(img, region, head));
+  return_if(should_grow_down, grow_down_insert(img, region, head));
+
   return_if(can_grow_down, grow_down_insert(img, region, head));
   assert(can_grow_right);
   return grow_right_insert(img, region, head);
@@ -273,6 +272,8 @@ bin_pack_2d(struct NamedSurface *imgs,
   assert(imgs);
   assert(limit_w > 0);
   assert(limit_h > 0);
+
+  errno = 0;
 
   qsort(imgs, num_imgs, sizeof (struct NamedSurface),
     maxside_named_surface_cmp);

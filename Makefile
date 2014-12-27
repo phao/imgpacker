@@ -1,18 +1,18 @@
 CC=gcc
 
-COMMON_C_FLAGS=`sdl2-config --cflags` -Wall -Wextra -std=c99 -pedantic
-DEBUG_C_FLAGS=-g3
-OPTIMIZATION_C_FLAGS=-O0
-CC_CMD=$(CC) $(COMMON_C_FLAGS) $(DEBUG_C_FLAGS) $(OPTIMIZATION_C_FLAGS)
+UNIT_BASE_FLAGS=`sdl2-config --cflags` -Wall -Wextra -std=c99 -pedantic
+UNIT_DEBUG_FLAGS=-g3
+UNIT_OPTIMIZATION_FLAGS=-O0
+UNIT_CMD=$(CC) $(UNIT_BASE_FLAGS) $(UNIT_DEBUG_FLAGS) $(UNITOPTIMIZATION_FLAGS)
 
 LD=gcc
 OBJS=Main.o BinPack2D.o xPNG.o
 LIBS=`sdl2-config --libs` -lpng -lSDL2_image
 
 .c.o:
-	$(CC_CMD) -c $<
+	$(UNIT_CMD) -c $<
 
-$(shell $(CC_CMD) -MM *.c > deps)
+$(shell $(UNIT_CMD) -MM *.c > deps)
 include deps
 
 build: $(OBJS)
