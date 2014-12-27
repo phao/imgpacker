@@ -1,0 +1,29 @@
+Units/Modules and Responsibilities
+==================================
+Main:
+  - Be the entrance point.
+  - Read command line options.
+  - Build a configuration object through Config's interface.
+  - Build a file name list.
+  - Load all images into SDL_Surface* using SDL2_image.
+  - Run the algorithm to produce a final SDL_Surface* image and regions
+  information through Packer's interface.
+  - Output the final SDL_Surface* into a BMP.
+  - Output the final regions information into a CSV through
+  RegionsInfoCSVOutput's interface.
+
+Packer:
+  - Implements the algorithm which packs the several SDL_Surface* into a single
+  one (produces both the final SDL_Surface* and the regions information).
+
+Config:
+  - Provide an interface to the runtime configuration of the program
+  (controlled by command line options and default values).
+  - Defines the data type for configuration information.
+
+RegionsInfo:
+  - Defines the data type for regions information.
+
+RegionsInfoCSVOutput:
+  - Implement the algorithm which outputs into a SDL RWOps the CSV content
+  given the regions information.

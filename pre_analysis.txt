@@ -1,0 +1,56 @@
+This program should be a command line utility which takes a bunch of images
+as command line parameters and packs them together into a single image output.
+A PNG is output. Together with the image output, there should be an output
+file describing the PNG. For each input image, there should be an entry in this
+output file telling where that input image is located in the output PNG image.
+
+Output image can only be in PNG.
+
+Output file describing the output image's sub regions (the input images) will
+be in CSV. Converting CSV into something else should be trivial.
+
+The program will be able to work with whatever SDL2_image can work with.
+
+After the command line options. You simply specify all the image inputs.
+
+The CSV format will be:
+
+  name,x,y,w,h
+
+Where x,y,w,h is the x,y within the output image that the input image is, and
+w,h is the input image's width and height. The name field is based on the
+file name:
+
+  - Stripped out of extensions if it has any.
+  - Anything non [A-Za-z0-9_] is converted into _ (if input file name is
+  foo/bar2.png, then csv name is foo_bar2). This is to make it easier to use
+  this in source code (it's often easy to convert a CSV text into some sort of
+  struct/array value).
+
+Command line options:
+
+  -w WIDTH
+    Maximum width (pixels) for the resulting PNG.
+  -h HEIGHT
+    Maximum height (pixels) for the resulting PNG.
+  -r REPLACEMENT
+    Character to be used instead of the default '_' to replace non C-identifier
+    characters.
+  -o PNG_OUTPUT_FILE_NAME
+    The name of the PNG output file (default is out.png).
+  -c CSV_OUTPUT_FILE_NAME
+    The name of the CSV output file (default is out.csv).
+  -l
+    Loosely enforce maximum dimensions. If specified, the program will try to
+    avoid going over maximum width/height, but if it finds it has to, it'll.
+
+As soon as something not recognized as a command line option appears, no more
+command line options can appear. So they should come first.
+
+  # This will attempt to load file: 'a.png' and '-l'.
+  imgpacker -w 1024 a.png -l
+
+Issues
+======
+There will be no attempt to deal with too many images so that they wouldn't fit
+into memory.
