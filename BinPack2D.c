@@ -100,8 +100,7 @@ err:
 static int
 try_insert(struct NamedSurface *img,
            struct RegionInfo *region,
-           int limit_w,
-           int limit_h,
+           const struct BinPack2DOptions *opts,
            struct TNode **head)
 {
   if (is_leaf_node(*head)) {
@@ -122,11 +121,11 @@ try_insert(struct NamedSurface *img,
   else {
     assert_inner_node(*head);
 
-    int attempt = try_insert(img, region, limit_w, limit_h, &(**head).right);
+    int attempt = try_insert(img, region, opts, &(**head).right);
     return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM,
       attempt);
     assert(attempt == ATTEMPT_UNFIT);
-    attempt = try_insert(img, region, limit_w, limit_h, &(**head).down);
+    attempt = try_insert(img, region, opts, &(**head).down);
     return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM,
       attempt);
     assert(attempt == ATTEMPT_UNFIT);
@@ -209,14 +208,13 @@ grow_down_insert(struct NamedSurface *img,
 static int
 grow_insert(struct NamedSurface *img,
             struct RegionInfo *region,
-            int limit_w,
-            int limit_h,
+            const struct BinPack2DOptions *opts,
             struct TNode **head)
 {
   assert(img);
   assert(region);
-  assert(limit_w > 0);
-  assert(limit_h > 0);
+  assert(opts->w > 0);
+  assert(opts->h > 0);
   assert(*head);
 
   const int img_w = img->surf->w;
@@ -229,8 +227,10 @@ grow_insert(struct NamedSurface *img,
 
   assert(can_grow_down || can_grow_right);
 
-  const int should_grow_down = can_grow_down && (limit_w <= root_w + img_w);
-  const int should_grow_right = can_grow_right && (limit_h <= root_h + img_h);
+  const int should_grow_down = can_grow_down && (opts->w <= root_w + img_w ||
+    (opts->square && root_w > root_h));
+  const int should_grow_right = can_grow_right && (opts->h <= root_h + img_h ||
+    (opts->square && root_h > root_w));
 
   return_if(should_grow_right, grow_right_insert(img, region, head));
   return_if(should_grow_down, grow_down_insert(img, region, head));
@@ -243,14 +243,13 @@ grow_insert(struct NamedSurface *img,
 static int
 insert(struct NamedSurface *img,
        struct RegionInfo *region,
-       int limit_w,
-       int limit_h,
+       const struct BinPack2DOptions *opts,
        struct TNode **head)
 {
-  int attempt = try_insert(img, region, limit_w, limit_h, head);
+  int attempt = try_insert(img, region, opts, head);
   return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM, attempt);
   assert(attempt == ATTEMPT_UNFIT);
-  return grow_insert(img, region, limit_w, limit_h, head);
+  return grow_insert(img, region, opts, head);
 }
 
 static void
@@ -265,13 +264,12 @@ free_tnode(struct TNode *n) {
 struct BinPack2DResult
 bin_pack_2d(struct NamedSurface *imgs,
             int num_imgs,
-            int limit_w,
-            int limit_h)
+            const struct BinPack2DOptions *opts)
 {
   assert(num_imgs > 0);
   assert(imgs);
-  assert(limit_w > 0);
-  assert(limit_h > 0);
+  assert(opts->w > 0);
+  assert(opts->h > 0);
 
   errno = 0;
 
@@ -287,8 +285,7 @@ bin_pack_2d(struct NamedSurface *imgs,
   goto_if(!head, err);
 
   for (int i = 0; i < num_imgs; i++) {
-    result.attempt = insert(imgs+i, result.regions+i, limit_w, limit_h,
-      &head);
+    result.attempt = insert(imgs+i, result.regions+i, opts, &head);
     goto_if(result.attempt < 0, err);
   }
 

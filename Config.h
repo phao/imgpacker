@@ -15,7 +15,8 @@ static const char CONFIG_DEFAULT_PNG_OUT[] = "out.png";
 static const char CONFIG_DEFAULT_CSV_OUT[] = "out.csv";
 
 enum {
-  CONFIG_VERBOSE_FLAG = 1 << 0
+  CONFIG_VERBOSE_FLAG = 1 << 0,
+  CONFIG_SQUARE_FLAG = 1 << 1,
 };
 
 enum {
@@ -32,5 +33,6 @@ enum {
   CONFIG_DEFAULT_CSV_OUT, CONFIG_DEFAULT_REPL}
 
 #define CONFIG_IS_VERBOSE(cfg) (((cfg).flags & CONFIG_VERBOSE_FLAG) != 0)
+#define CONFIG_IS_SQUARE(cfg) (((cfg).flags & CONFIG_SQUARE_FLAG) != 0)
 
 #endif

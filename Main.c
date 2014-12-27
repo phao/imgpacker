@@ -28,6 +28,7 @@ static int num_imgs, loaded;
 static struct NamedSurface *imgs;
 static char **files;
 static struct BinPack2DResult bp2d;
+static struct BinPack2DOptions bp2d_opts;
 
 static int
 parse_int(const char *text, int *out) {
@@ -155,6 +156,9 @@ build_cfg(int argc, char **argv) {
       case 'v':
         cfg.flags |= CONFIG_VERBOSE_FLAG;
         break;
+      case 's':
+        cfg.flags |= CONFIG_SQUARE_FLAG;
+        break;
       default:
         uerr_exit("Invalid option: %s.", opt);
         break;
@@ -233,7 +237,8 @@ main(int argc, char *argv[]) {
   init();
   build_cfg(argc, argv);
   load_imgs();
-  bp2d = bin_pack_2d(imgs, num_imgs, cfg.w, cfg.h);
+  bp2d_opts = (struct BinPack2DOptions) {cfg.w, cfg.h, CONFIG_IS_SQUARE(cfg)};
+  bp2d = bin_pack_2d(imgs, num_imgs, &bp2d_opts);
   if (bp2d.attempt < 0) {
     err_exit("BinPack2D: %s.", bp2d_strerror(bp2d.attempt));
   };

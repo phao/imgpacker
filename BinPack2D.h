@@ -15,11 +15,14 @@ struct BinPack2DResult {
   struct RegionInfo *regions;
 };
 
+struct BinPack2DOptions {
+  int w, h, square;
+};
+
 struct BinPack2DResult
 bin_pack_2d(struct NamedSurface *imgs,
             int num_imgs,
-            int limit_w,
-            int limit_h);
+            const struct BinPack2DOptions *opts);
 
 const char *
 bp2d_strerror(int attempt);
