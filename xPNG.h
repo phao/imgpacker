@@ -4,7 +4,7 @@
 #include <SDL/SDL.h>
 
 enum {
-  X_PNG_IO_FAIL = -1,
+  X_PNG_FAIL_LIBC = -1,
   X_PNG_FAIL = -2,
   X_PNG_OK = 0
 };

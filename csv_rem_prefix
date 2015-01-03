@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Black magic perl wizardry to find the largest common prefix of all input
+# lines (I didn't write this -- in fact I don't even know how it works in
+# any significant level of detail):
+# => perl -0777 -nE 'say for /\A([^\n]+)[^\n]*\n(?:^\1[^\n]*\n)+\Z/ms'
+#
+# Alternative:
+# => perl -0777 -nE 'say for /\A(.+).*\n(?:^\1.*\n)+\Z/m'
+#
+# Code given to me by a go|dfish in #bash @ irc.freenode.com.
+
+CONTENT=$(cat)
+
+PREFIX=$(
+  echo "$CONTENT" |
+  perl -0777 -nE 'say for /\A(.+).*\n(?:^\1.*\n)+\Z/m'
+)
+
+echo "$CONTENT" | sed -s "s/^${PREFIX}//g"

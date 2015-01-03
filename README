@@ -1,0 +1,22 @@
+Algorithm
+=========
+The bin pack 2D algorithm used was taked off this web page
+http://codeincomplete.com/posts/2011/5/7/bin_packing/. I've looked at this one,
+and two other alternatives, but this was extremely straightforward to
+understand and implement, so I went with it.
+
+Building
+========
+Given you have SDL2, SDL2_image and libPNG, it should be as simple as:
+
+  make build
+
+And you should have a imgpacker binary on the same folder.
+
+The program is built with debugging and assertions turned on. You'd have to
+change Makefile to have something like an optimized build.
+
+Notes on GNU Make
+=================
+The make file is pretty simple, but I've only used GNU make. Besides, I can't
+guarantee it'll work on different versions of the make utility.

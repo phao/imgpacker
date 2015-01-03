@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Like toC_impl, this is a draft version.
+
+# ARG $1 => identifier prefix
+
+PREFIX=${1}
+
+echo "struct ${PREFIX}_SpriteSheetPiece {
+  int x, y, w, h;
+  int id;
+  const char *name;
+};
+
+enum {"
+
+awk -F, "
+  BEGIN {
+    n = 0
+  }
+  {
+    n++;
+    printf(\"%s  ${PREFIX}_%s\", (n == 1 ? \"\" : \",\\n\"), toupper(\$1));
+  }"
+
+echo "
+};
+
+extern const struct ${PREFIX}_SpriteSheetPiece
+${PREFIX}_SpriteSheetData(int which);
+"

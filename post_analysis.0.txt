@@ -32,10 +32,3 @@ PNG Output
 I don't understand about PNG images processing. The code in xPNG.c and xPNG.h
 was mostly a copy/paste from the web. I tweaked with the code a little so it
 could do better error reporting, but that's about it.
-
-More Feature
-============
-A "-s" option, which should tell the program to attempt to produce square-ish
-output images. If the suggested maximum width/height weren't violated, the
-output image should grow attempting to keep the difference between width and
-height close to 0.

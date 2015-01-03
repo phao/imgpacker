@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#include <SDL2/SDL.h>
+
 #include "XFlow.h"
 #include "RegionInfo.h"
 #include "BinPack2D.h"
@@ -18,8 +20,10 @@ struct TNode {
 };
 
 enum {
-  /** These attempt result is only used internally. A call to bin_pack_2d
-   * cannot ever return it. */
+  /**
+   * These attempt result is only used internally.
+   * A call to bin_pack_2d cannot ever return it.
+   */
   ATTEMPT_UNFIT = INT_MIN
 };
 
@@ -89,7 +93,7 @@ split_leaf(struct TNode *n, int img_w, int img_h) {
 
   return 0;
 
-err:
+ err:
   free(n->right);
   free(n->down);
   n->right = 0;
@@ -98,15 +102,15 @@ err:
 }
 
 static int
-try_insert(struct NamedSurface *img,
+try_insert(struct TNode **head,
            struct RegionInfo *region,
-           const struct BinPack2DOptions *opts,
-           struct TNode **head)
+           struct NamedSurface *img,
+           struct BinPack2DOptions opts)
 {
   if (is_leaf_node(*head)) {
-    const SDL_Rect *leaf_rect = &(**head).rect;
-    const int img_w = img->surf->w;
-    const int img_h = img->surf->h;
+    SDL_Rect *leaf_rect = &(**head).rect;
+    int img_w = img->surf->w;
+    int img_h = img->surf->h;
 
     if (leaf_rect->w >= img_w && leaf_rect->h >= img_h) {
       return_if(split_leaf(*head, img_w, img_h) < 0, ATTEMPT_NO_MEM);
@@ -121,33 +125,33 @@ try_insert(struct NamedSurface *img,
   else {
     assert_inner_node(*head);
 
-    int attempt = try_insert(img, region, opts, &(**head).right);
+    int attempt = try_insert(&(**head).right, region, img, opts);
     return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM,
-      attempt);
+              attempt);
     assert(attempt == ATTEMPT_UNFIT);
-    attempt = try_insert(img, region, opts, &(**head).down);
+    attempt = try_insert(&(**head).down, region, img, opts);
     return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM,
-      attempt);
+              attempt);
     assert(attempt == ATTEMPT_UNFIT);
     return ATTEMPT_UNFIT;
   }
 }
 
 static int
-grow_right_insert(struct NamedSurface *img,
+grow_right_insert(struct TNode **head,
                   struct RegionInfo *region,
-                  struct TNode **head)
+                  struct NamedSurface *img)
 {
   assert_inner_node(*head);
 
-  const SDL_Rect *head_rect = &(**head).rect;
-  const int head_x = head_rect->x;
-  const int head_y = head_rect->y;
-  const int head_w = head_rect->w;
-  const int head_h = head_rect->h;
-  const int img_w = img->surf->w;
-  const int img_h = img->surf->h;
-  const int new_w = img_w + head_w;
+  SDL_Rect *head_rect = &(**head).rect;
+  int head_x = head_rect->x;
+  int head_y = head_rect->y;
+  int head_w = head_rect->w;
+  int head_h = head_rect->h;
+  int img_w = img->surf->w;
+  int img_h = img->surf->h;
+  int new_w = img_w + head_w;
 
   struct TNode *new_head = malloc(sizeof (struct TNode));
   return_if(!new_head, ATTEMPT_NO_MEM);
@@ -170,20 +174,20 @@ grow_right_insert(struct NamedSurface *img,
 }
 
 static int
-grow_down_insert(struct NamedSurface *img,
+grow_down_insert(struct TNode **head,
                  struct RegionInfo *region,
-                 struct TNode **head)
+                 struct NamedSurface *img)
 {
   assert_inner_node(*head);
 
-  const SDL_Rect *head_rect = &(**head).rect;
-  const int head_x = head_rect->x;
-  const int head_y = head_rect->y;
-  const int head_w = head_rect->w;
-  const int head_h = head_rect->h;
-  const int img_w = img->surf->w;
-  const int img_h = img->surf->h;
-  const int new_h = img_h + head_h;
+  SDL_Rect *head_rect = &(**head).rect;
+  int head_x = head_rect->x;
+  int head_y = head_rect->y;
+  int head_w = head_rect->w;
+  int head_h = head_rect->h;
+  int img_w = img->surf->w;
+  int img_h = img->surf->h;
+  int new_h = img_h + head_h;
 
   struct TNode *new_head = malloc(sizeof (struct TNode));
   return_if(!new_head, ATTEMPT_NO_MEM);
@@ -206,50 +210,49 @@ grow_down_insert(struct NamedSurface *img,
 }
 
 static int
-grow_insert(struct NamedSurface *img,
+grow_insert(struct TNode **head,
             struct RegionInfo *region,
-            const struct BinPack2DOptions *opts,
-            struct TNode **head)
+            struct NamedSurface *img,
+            struct BinPack2DOptions opts)
 {
   assert(img);
   assert(region);
-  assert(opts->w > 0);
-  assert(opts->h > 0);
+  assert(opts.w > 0);
+  assert(opts.h > 0);
   assert(*head);
 
-  const int img_w = img->surf->w;
-  const int img_h = img->surf->h;
-  const int root_w = (*head)->rect.w;
-  const int root_h = (*head)->rect.h;
+  int img_w = img->surf->w;
+  int img_h = img->surf->h;
+  int root_w = (*head)->rect.w;
+  int root_h = (*head)->rect.h;
 
-  const int can_grow_down = root_w >= img_w;
-  const int can_grow_right = root_h >= img_h;
+  int can_grow_down = root_w >= img_w;
+  int can_grow_right = root_h >= img_h;
 
   assert(can_grow_down || can_grow_right);
 
-  const int should_grow_down = can_grow_down && (opts->w <= root_w + img_w ||
-    (opts->square && root_w > root_h));
-  const int should_grow_right = can_grow_right && (opts->h <= root_h + img_h ||
-    (opts->square && root_h > root_w));
+  int should_grow_down = can_grow_down &&
+    (opts.w <= root_w + img_w || root_w > root_h);
+  int should_grow_right = can_grow_right &&
+    (opts.h <= root_h + img_h || root_h > root_w);
 
-  return_if(should_grow_right, grow_right_insert(img, region, head));
-  return_if(should_grow_down, grow_down_insert(img, region, head));
-
-  return_if(can_grow_down, grow_down_insert(img, region, head));
+  return_if(should_grow_right, grow_right_insert(head, region, img));
+  return_if(should_grow_down, grow_down_insert(head, region, img));
+  return_if(can_grow_down, grow_down_insert(head, region, img));
   assert(can_grow_right);
-  return grow_right_insert(img, region, head);
+  return grow_right_insert(head, region, img);
 }
 
 static int
-insert(struct NamedSurface *img,
+insert(struct TNode **head,
        struct RegionInfo *region,
-       const struct BinPack2DOptions *opts,
-       struct TNode **head)
+       struct NamedSurface *img,
+       struct BinPack2DOptions opts)
 {
-  int attempt = try_insert(img, region, opts, head);
+  int attempt = try_insert(head, region, img, opts);
   return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM, attempt);
   assert(attempt == ATTEMPT_UNFIT);
-  return grow_insert(img, region, opts, head);
+  return grow_insert(head, region, img, opts);
 }
 
 static void
@@ -264,12 +267,12 @@ free_tnode(struct TNode *n) {
 struct BinPack2DResult
 bin_pack_2d(struct NamedSurface *imgs,
             int num_imgs,
-            const struct BinPack2DOptions *opts)
+            struct BinPack2DOptions opts)
 {
   assert(num_imgs > 0);
   assert(imgs);
-  assert(opts->w > 0);
-  assert(opts->h > 0);
+  assert(opts.w > 0);
+  assert(opts.h > 0);
 
   errno = 0;
 
@@ -285,7 +288,7 @@ bin_pack_2d(struct NamedSurface *imgs,
   goto_if(!head, err);
 
   for (int i = 0; i < num_imgs; i++) {
-    result.attempt = insert(imgs+i, result.regions+i, opts, &head);
+    result.attempt = insert(&head, result.regions+i, imgs+i, opts);
     goto_if(result.attempt < 0, err);
   }
 
@@ -308,7 +311,7 @@ bin_pack_2d(struct NamedSurface *imgs,
 
   result.attempt = ATTEMPT_NO_SURFACE;
   result.img = SDL_CreateRGBSurface(0, head->rect.w, head->rect.h, 32,
-    rmask, gmask, bmask, amask);
+                                    rmask, gmask, bmask, amask);
   goto_if(!result.img, err);
 
   for (int i = 0; i < num_imgs; i++) {

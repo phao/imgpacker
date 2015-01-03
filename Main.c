@@ -28,7 +28,6 @@ static int num_imgs, loaded;
 static struct NamedSurface *imgs;
 static char **files;
 static struct BinPack2DResult bp2d;
-static struct BinPack2DOptions bp2d_opts;
 
 static int
 parse_int(const char *text, int *out) {
@@ -45,7 +44,9 @@ static void
 cleanup(void) {
   for (int i = 0; i < loaded; i++) {
     SDL_FreeSurface(imgs[i].surf);
-    free(imgs[i].name);
+    // The cast is to indicate to the compiler that we really mean to
+    // discard the const qualifier.
+    free((void*) imgs[i].name);
   }
   free(imgs);
   free(bp2d.regions);
@@ -60,28 +61,15 @@ cleanup(void) {
   SDL_Quit();
 }
 
-static char *
-dup_adjust_name(const char *name) {
-  int len = strlen(name);
-  char *str = malloc(len+1);
-  strcpy(str, name);
-  for (int i = 0; i < len; i++) {
-    if (!isalnum(str[i]) && str[i] != '_') {
-      str[i] = '_';
-    }
-  }
-  return str;
-}
-
 static void
 print_usage(void) {
   fputs("Usage:\n"
-    "imgpacker [-l] [-w WITDH] [-h HEIGHT] [-o PNG_OUT_FILE]\n"
-    "\t[-c CSV_OUT_FILE] [-r REPLACEMENT_CHAR] <input file>+\n"
-    "\n"
-    "* In case no PNG output file is specified, 'out.png' will be used.\n"
-    "* In case no CSV output file is specified, 'out.csv' will be used.\n",
-    stderr);
+        "imgpacker [-l] [-w WITDH] [-h HEIGHT] [-o PNG_OUT_FILE]\n"
+        "\t[-c CSV_OUT_FILE] [-r REPLACEMENT_CHAR] <input file>+\n"
+        "\n"
+        "* In case no PNG output file is specified, 'out.png' will be used.\n"
+        "* In case no CSV output file is specified, 'out.csv' will be used.\n",
+        stderr);
 }
 
 static void
@@ -113,9 +101,47 @@ uerr_exit(const char *fmt, ...) {
 }
 
 static void
+vlog(const char *fmt, ...) {
+  if (CONFIG_IS_VERBOSE(cfg)) {
+    va_list params;
+    va_start(params, fmt);
+    vfprintf(stderr, fmt, params);
+    va_end(params);
+  }
+}
+
+static char *
+dup_adjust_name(const char *name) {
+  size_t ulen = strlen(name);
+  if (ulen >= INT_MAX) {
+    err_exit("String too big (really?): len=%zu.", ulen);
+  }
+  int len = ulen;
+  errno = 0;
+  char *str = malloc(len+1);
+  if (!str) {
+    err_exit("libc: %s.", strerror(errno));
+  }
+  strcpy(str, name);
+  for (int i = len-1; i >= 0; i--) {
+    if (str[i] == '.') {
+      str[i] = 0;
+      len = i;
+      break;
+    }
+  }
+  for (int i = 0; i < len; i++) {
+    if (!isalnum(str[i]) && str[i] != '_') {
+      str[i] = '_';
+    }
+  }
+  return str;
+}
+
+static void
 build_cfg(int argc, char **argv) {
   char **argv_begin = argv;
-  for (const char *opt = *++argv;
+  for (char *opt = *++argv;
        opt && *opt == '-' && !opt[2];
        opt = *++argv)
   {
@@ -156,14 +182,12 @@ build_cfg(int argc, char **argv) {
       case 'v':
         cfg.flags |= CONFIG_VERBOSE_FLAG;
         break;
-      case 's':
-        cfg.flags |= CONFIG_SQUARE_FLAG;
-        break;
       default:
         uerr_exit("Invalid option: %s.", opt);
         break;
     }
   }
+
   files = argv;
   num_imgs = argc - (argv - argv_begin);
   if (num_imgs == 0) {
@@ -188,12 +212,11 @@ load_imgs(void) {
   for (loaded = 0; loaded < num_imgs; loaded++) {
     imgs[loaded].surf = IMG_Load(files[loaded]);
     if (!imgs[loaded].surf) {
-      err_exit("SDL2_image: %s.", IMG_GetError());
+      err_exit("Loading file: %s: SDL2_image: %s.", files[loaded],
+         IMG_GetError());
     }
     imgs[loaded].name = dup_adjust_name(files[loaded]);
-    if (CONFIG_IS_VERBOSE(cfg)) {
-      fprintf(stderr, "Loaded %s.\n", files[loaded]);
-    }
+    vlog("Loaded %s.\n", files[loaded]);
   }
 }
 
@@ -215,6 +238,7 @@ regions_csv_output(void) {
   if (!csvf) {
     err_exit("libc: %s.", strerror(errno));
   }
+  // check for errors, use ferror
   for (int i = 0; i < num_imgs; i++) {
     struct RegionInfo *reg = bp2d.regions+i;
     fprintf(csvf, "%s,%d,%d,%d,%d\n", reg->img->name, reg->rect.x,
@@ -232,16 +256,23 @@ output(void) {
   regions_csv_output();
 }
 
+static void
+imgpack(void) {
+  vlog("Packing images.\n");
+  bp2d = bin_pack_2d(imgs, num_imgs, (struct BinPack2DOptions)
+    {cfg.w, cfg.h});
+  if (bp2d.attempt < 0) {
+    err_exit("BinPack2D: %s.", bp2d_strerror(bp2d.attempt));
+  }
+  vlog("Done.\n");
+}
+
 int
 main(int argc, char *argv[]) {
   init();
   build_cfg(argc, argv);
   load_imgs();
-  bp2d_opts = (struct BinPack2DOptions) {cfg.w, cfg.h, CONFIG_IS_SQUARE(cfg)};
-  bp2d = bin_pack_2d(imgs, num_imgs, &bp2d_opts);
-  if (bp2d.attempt < 0) {
-    err_exit("BinPack2D: %s.", bp2d_strerror(bp2d.attempt));
-  };
+  imgpack();
   output();
   cleanup();
   return 0;

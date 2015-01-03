@@ -16,15 +16,15 @@ struct BinPack2DResult {
 };
 
 struct BinPack2DOptions {
-  int w, h, square;
+  int w, h;
 };
 
 struct BinPack2DResult
 bin_pack_2d(struct NamedSurface *imgs,
-            int num_imgs,
-            const struct BinPack2DOptions *opts);
+            const int num_imgs,
+            struct BinPack2DOptions opts);
 
 const char *
-bp2d_strerror(int attempt);
+bp2d_strerror(const int attempt);
 
 #endif

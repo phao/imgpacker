@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# This is a draft code for converting from the CSV file into a C
+# source code. It's incomplete.
+
+# ARG $1 => header file for interface file
+# ARG $2 => identifier prefix
+
+PREFIX=${2}
+
+echo "#include \"$1\""
+
+echo "
+static const struct ${PREFIX}_SpriteSheetPiece
+pieces[] = {"
+
+awk -F, "
+  BEGIN {
+    n = 0;
+  }
+  {
+    n++;
+    printf(\"%s  {%s, %s, %s, %s, ${PREFIX}_%s, \\\"${PREFIX}_%s\\\"}\",
+      (n == 1 ? \"\" : \",\\n\"), \$2, \$3, \$4, \$5, toupper(\$1), \$1);
+  }"
+
+echo "
+};
+
+const struct ${PREFIX}_SpriteSheetPiece
+${PREFIX}_SpriteSheetData(int which) {
+  return pieces[which];
+}
+"

@@ -5,7 +5,7 @@
 
 struct NamedSurface {
   SDL_Surface *surf;
-  char *name;
+  const char *name;
 };
 
 struct RegionInfo {
@@ -14,3 +14,4 @@ struct RegionInfo {
 };
 
 #endif
+
