@@ -232,9 +232,11 @@ grow_insert(struct TNode **head,
   assert(can_grow_down || can_grow_right);
 
   int should_grow_down = can_grow_down &&
-    (opts.w <= root_w + img_w || root_w > root_h);
+    (opts.w <= root_w + img_w || root_w > root_h) &&
+    root_h + img_h <= opts.h;
   int should_grow_right = can_grow_right &&
-    (opts.h <= root_h + img_h || root_h > root_w);
+    (opts.h <= root_h + img_h || root_h > root_w) &&
+    root_w + img_w <= opts.w;
 
   return_if(should_grow_right, grow_right_insert(head, region, img));
   return_if(should_grow_down, grow_down_insert(head, region, img));
