@@ -278,13 +278,13 @@ bin_pack_2d(struct NamedSurface *imgs,
 
   errno = 0;
 
-  qsort(imgs, num_imgs, sizeof (struct NamedSurface),
+  qsort(imgs, (size_t) num_imgs, sizeof (struct NamedSurface),
     maxside_named_surface_cmp);
 
   struct BinPack2DResult result = {ATTEMPT_NO_MEM, 0, 0};
   struct TNode *head = 0;
 
-  result.regions = malloc(num_imgs * sizeof (struct RegionInfo));
+  result.regions = malloc((size_t) num_imgs * sizeof (struct RegionInfo));
   goto_if(!result.regions, err);
   head = leaf_node(0, 0, imgs[0].surf->w, imgs[0].surf->h);
   goto_if(!head, err);

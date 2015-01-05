@@ -1,7 +1,8 @@
 CC=gcc
 OUT_FILE=imgpacker
 
-UNIT_BASE_FLAGS=`sdl2-config --cflags` -Wall -Wextra -std=c99 -pedantic
+UNIT_BASE_FLAGS=`sdl2-config --cflags` -Wall -Wextra -std=c99 -pedantic \
+	-Wconversion -Werror
 UNIT_DEBUG_FLAGS=-g3
 UNIT_OPTIMIZATION_FLAGS=-O0
 UNIT_CMD=$(CC) $(UNIT_BASE_FLAGS) $(UNIT_DEBUG_FLAGS) $(UNIT_OPTIMIZATION_FLAGS)

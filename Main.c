@@ -29,14 +29,17 @@ static struct NamedSurface *imgs;
 static char **files;
 static struct BinPack2DResult bp2d;
 
+/**
+ * Parse positive int.
+ */
 static int
-parse_int(const char *text, int *out) {
+parse_pint(const char *text, int *out) {
   return_if(!*text, PINT_EMPTY_INPUT);
   char *e;
   long lout = strtol(text, &e, 10);
   return_if(*e, PINT_INVALID_INPUT);
-  return_if(lout > INT_MAX, PINT_OVERFLOW_INPUT);
-  *out = lout;
+  return_if(lout <= 0 || lout > INT_MAX, PINT_OVERFLOW_INPUT);
+  *out = (int) lout;
   return PINT_SUCCESS;
 }
 
@@ -116,9 +119,10 @@ dup_adjust_name(const char *name) {
   if (ulen >= INT_MAX) {
     err_exit("String too big (really?): len=%zu.", ulen);
   }
-  int len = ulen;
+  int len = (int) ulen;
+  assert(len+1 <= INT_MAX);
   errno = 0;
-  char *str = malloc(len+1);
+  char *str = malloc((size_t) (len+1));
   if (!str) {
     err_exit("libc: %s.", strerror(errno));
   }
@@ -148,13 +152,13 @@ build_cfg(int argc, char **argv) {
     switch (opt[1]) {
       case 'w':
         argv++;
-        if (parse_int(*argv, &cfg.w) < 0) {
+        if (parse_pint(*argv, &cfg.w) < 0) {
           uerr_exit("Invalid width value: '%s'.", *argv);
         }
         break;
       case 'h':
         argv++;
-        if (parse_int(*argv, &cfg.h) < 0) {
+        if (parse_pint(*argv, &cfg.h) < 0) {
           uerr_exit("Invalid height value: '%s'.", *argv);
         }
         break;
@@ -189,10 +193,20 @@ build_cfg(int argc, char **argv) {
   }
 
   files = argv;
-  num_imgs = argc - (argv - argv_begin);
+  num_imgs = (int) (argc - (argv - argv_begin));
   if (num_imgs == 0) {
     uerr_exit("No input files.");
   }
+  else if (num_imgs < 0) {
+    err_exit("Number of images is invalid: %d.\n", num_imgs);
+  }
+
+  /*
+   * What if num_imgs is too large? Overflow check here is silly, but the value
+   * for num_imgs is out of my control, so it seems like it should be checked.
+   *
+   * Basically, num_imgs needs to be positive and within SIZE_MAX.
+   */
 
   assert(files);
   assert(num_imgs > 0);
@@ -203,8 +217,10 @@ load_imgs(void) {
   assert(num_imgs > 0);
   assert(files);
 
+  // What if ((size_t) num_imgs * sizeof (struct NamedSurface)) overflows?
+
   errno = 0;
-  imgs = malloc(num_imgs * sizeof (struct NamedSurface));
+  imgs = malloc((size_t) num_imgs * sizeof (struct NamedSurface));
   if (!imgs) {
     err_exit("libc: %s.", strerror(errno));
   }

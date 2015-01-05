@@ -56,7 +56,7 @@ xpng_save_surface(const char *filename, SDL_Surface *surf) {
 
   /* Initializing png structures and callbacks */
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL,
-                                    xpng_user_error, xpng_user_warn);
+    xpng_user_error, xpng_user_warn);
   if (png_ptr == NULL) {
     return X_PNG_FAIL;
   }
@@ -76,15 +76,15 @@ xpng_save_surface(const char *filename, SDL_Surface *surf) {
   png_init_io(png_ptr, fp);
 
   colortype = png_colortype_from_surface(surf);
-  png_set_IHDR(png_ptr, info_ptr, surf->w, surf->h, 8, colortype,
-               PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
-               PNG_FILTER_TYPE_DEFAULT);
+  png_set_IHDR(png_ptr, info_ptr, (png_uint_32) surf->w, (png_uint_32)surf->h,
+    8, colortype, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+    PNG_FILTER_TYPE_DEFAULT);
 
   /* Writing the image */
   png_write_info(png_ptr, info_ptr);
   png_set_packing(png_ptr);
 
-  row_pointers = (png_bytep*) malloc(sizeof(png_bytep)*surf->h);
+  row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * (size_t) surf->h);
   for (i = 0; i < surf->h; i++) {
     row_pointers[i] = (png_bytep)(Uint8 *)surf->pixels + i*surf->pitch;
   }
