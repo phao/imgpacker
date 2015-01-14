@@ -20,3 +20,18 @@ Notes on GNU Make
 =================
 The make file is pretty simple, but I've only used GNU make. Besides, I can't
 guarantee it'll work on different versions of the make utility.
+
+The Use of AllocUtil
+====================
+I've written a library called AllocUtil containing some utilities for dealing
+with dynamically allocated memory (https://github.com/phao/AllocUtil). This
+program (imgpacker) is the first program I write which uses AllocUtil.
+Strangely enough, it all worked just right from the first time, which is kind
+of both scary and gratifying.
+
+Names
+=====
+Currently, this code uses lower case identifiers with underscores for
+separations. This doesn't match the naming style I'm going for these days, so
+I'll probably be changing it in the future.
+

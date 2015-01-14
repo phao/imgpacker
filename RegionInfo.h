@@ -6,6 +6,7 @@
 struct NamedSurface {
   SDL_Surface *surf;
   const char *name;
+  int index;
 };
 
 struct RegionInfo {

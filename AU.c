@@ -381,7 +381,6 @@ AU_FSA_Setup(AU_FixedSizeAllocator *fsa, size_t elt_size, size_t cap) {
 void *
 AU_FSA_Alloc(AU_FixedSizeAllocator *fsa) {
   if (!fsa->free_head) {
-    fprintf(stderr, "Expanding...\n");
     if (fsa->total_cap == SIZE_MAX) {
       // Seriously?
       ISSUE_ERROR(AU_ERR_OVERFLOW);

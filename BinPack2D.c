@@ -284,8 +284,6 @@ bin_pack_2d(struct NamedSurface *imgs,
   goto_if(AU_FSA_Setup(&cx.fsa, sizeof (struct TNode), 1) < 0,
           err);
 
-  errno = 0;
-
   qsort(imgs, num_imgs, sizeof (struct NamedSurface),
         maxside_named_surface_cmp);
 

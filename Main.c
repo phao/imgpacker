@@ -15,6 +15,7 @@
 #include "RegionInfo.h"
 #include "BinPack2D.h"
 #include "xPNG.h"
+#include "AU.h"
 
 enum {
   PINT_EMPTY_INPUT = -1,
@@ -39,7 +40,7 @@ parse_pint(const char *text, int *out) {
   long lout = strtol(text, &e, 10);
   return_if(*e, PINT_INVALID_INPUT);
   return_if(lout <= 0 || lout > INT_MAX, PINT_OVERFLOW_INPUT);
-  *out = (int) lout;
+  *out = lout;
   return PINT_SUCCESS;
 }
 
@@ -56,10 +57,13 @@ cleanup(void) {
   if(bp2d.img) {
     SDL_FreeSurface(bp2d.img);
   }
-  loaded = 0;
-  imgs = 0;
-  bp2d.regions = 0;
-  bp2d.img = 0;
+  if (cfg.img_list_in) {
+    /*
+     * The memory allocated by the AU_ByteBuilder in the call to
+     * read_files_list.
+     */
+    free(*files);
+  }
   IMG_Quit();
   SDL_Quit();
 }
@@ -68,7 +72,8 @@ static void
 print_usage(void) {
   fputs("Usage:\n"
         "imgpacker [-l] [-w WITDH] [-h HEIGHT] [-o PNG_OUT_FILE]\n"
-        "\t[-c CSV_OUT_FILE] [-r REPLACEMENT_CHAR] <input file>+\n"
+        "          [-c CSV_OUT_FILE] [-r REPLACEMENT_CHAR] \n"
+        "          (-f IMAGE_LIST_FILE | <input file>+)\n"
         "\n"
         "* In case no PNG output file is specified, 'out.png' will be used.\n"
         "* In case no CSV output file is specified, 'out.csv' will be used.\n",
@@ -119,10 +124,9 @@ dup_adjust_name(const char *name) {
   if (ulen >= INT_MAX) {
     err_exit("String too big (really?): len=%zu.", ulen);
   }
-  int len = (int) ulen;
+  int len = ulen;
   assert(len+1 <= INT_MAX);
-  errno = 0;
-  char *str = malloc((size_t) (len+1));
+  char *str = malloc(len+1);
   if (!str) {
     err_exit("libc: %s.", strerror(errno));
   }
@@ -140,6 +144,100 @@ dup_adjust_name(const char *name) {
     }
   }
   return str;
+}
+
+static char **
+read_files_list(const char *img_list_file, int *out_num_files) {
+  /*
+   * The idea here is to keep two builders around, one for the the chars of
+   * the strings, and another one for the length of the strings. Both builders
+   * keep their data according to the order of the strings being read.
+   *
+   * After reading everything into the buffer, I can build a char** and return
+   * it.
+   */
+
+  enum {
+    INITIAL_BUF_CAP = 8000,
+    EXPECTED_LINES = 100
+  };
+
+  FILE *file = fopen(img_list_file, "r");
+  if (!file) {
+    err_exit("Couldn't open input file: %s\n"
+      "libc: %s", img_list_file, strerror(errno));
+  }
+
+  AU_ByteBuilder chars_b1;
+  AU_FixedSizeBuilder lens_fsb;
+  char buf[INITIAL_BUF_CAP];
+  size_t len = 0;
+
+  AU_B1_Setup(&chars_b1, INITIAL_BUF_CAP);
+  AU_FSB_Setup(&lens_fsb, sizeof (size_t), EXPECTED_LINES);
+
+  /*
+   * buf[INITIAL_BUF_CAP-2] is initially set to 0, and after each iteration,
+   * it's reset to 0.
+   */
+  buf[INITIAL_BUF_CAP-2] = 0;
+  while (fgets(buf, INITIAL_BUF_CAP, file)) {
+    char candidate_last = buf[INITIAL_BUF_CAP-2];
+
+    if (candidate_last == 0 || candidate_last == '\n') {
+      // Found end of line.
+
+      size_t final_len = strlen(buf);
+      if (buf[final_len-1] == '\n') {
+        buf[final_len-1] = 0;
+        final_len--;
+      }
+      AU_B1_Append(&chars_b1, buf, final_len+1);
+      len += final_len;
+      AU_FSB_Append(&lens_fsb, &len, 1);
+      len = 0;
+    }
+    else {
+      // Still in the middle of the line.
+
+      AU_B1_Append(&chars_b1, buf, INITIAL_BUF_CAP-1);
+      len += INITIAL_BUF_CAP-1;
+    }
+
+    // The reset to 0.
+    buf[INITIAL_BUF_CAP-2] = 0;
+  }
+
+  if (ferror(file)) {
+    err_exit("Error while reading the file: %s.\n"
+      "libc: %s.", img_list_file, strerror(errno));
+  }
+
+  assert(feof(file));
+
+  const size_t num_lines = AU_FSB_GetUsedCount(&lens_fsb);
+  char **file_names_list = malloc(sizeof (char*) * num_lines);
+  if (!file_names_list) {
+    err_exit("Allocation error.\n"
+      "libc: %s", strerror(errno));
+  }
+
+  char *chars_mem = AU_B1_GetMemory(&chars_b1);
+  long *line_lens = AU_FSB_GetMemory(&lens_fsb);
+  for (size_t i = 0; i < num_lines; i++) {
+    file_names_list[i] = chars_mem;
+    chars_mem += *line_lens + 1;
+    line_lens++;
+  }
+  *out_num_files = num_lines;
+
+  assert(file_names_list);
+  assert(file);
+  assert(AU_FSB_GetMemory(&lens_fsb));
+
+  free(AU_FSB_GetMemory(&lens_fsb));
+  fclose(file);
+  return file_names_list;
 }
 
 static void
@@ -186,14 +284,24 @@ build_cfg(int argc, char **argv) {
       case 'v':
         cfg.flags |= CONFIG_VERBOSE_FLAG;
         break;
+      case 'f':
+        argv++;
+        cfg.img_list_in = *argv;
+        break;
       default:
         uerr_exit("Invalid option: %s.", opt);
         break;
     }
   }
 
-  files = argv;
-  num_imgs = (int) (argc - (argv - argv_begin));
+  if (cfg.img_list_in) {
+    files = read_files_list(cfg.img_list_in, &num_imgs);
+  }
+  else {
+    files = argv;
+    num_imgs = argc - (argv - argv_begin);
+  }
+
   if (num_imgs == 0) {
     uerr_exit("No input files.");
   }
@@ -219,8 +327,7 @@ load_imgs(void) {
 
   // What if ((size_t) num_imgs * sizeof (struct NamedSurface)) overflows?
 
-  errno = 0;
-  imgs = malloc((size_t) num_imgs * sizeof (struct NamedSurface));
+  imgs = malloc(num_imgs * sizeof (struct NamedSurface));
   if (!imgs) {
     err_exit("libc: %s.", strerror(errno));
   }
@@ -233,6 +340,7 @@ load_imgs(void) {
     }
     imgs[loaded].name = dup_adjust_name(files[loaded]);
     vlog("Loaded %s.\n", files[loaded]);
+    imgs[loaded].index = loaded;
   }
 }
 
@@ -247,13 +355,33 @@ init(void) {
   }
 }
 
+static inline int
+cmp_region_info_by_named_surface_index(const void *a, const void *b) {
+  const struct RegionInfo *i1 = (const struct RegionInfo*)a;
+  const struct RegionInfo *i2 = (const struct RegionInfo*)b;
+  if (i1->img->index < i2->img->index) {
+    return -1;
+  }
+  else if (i1->img->index > i2->img->index) {
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
 static void
 regions_csv_output(void) {
-  errno = 0;
   FILE *csvf = fopen(cfg.csv_out, "w");
   if (!csvf) {
     err_exit("libc: %s.", strerror(errno));
   }
+  // We're going to sort the regions info so we can get them in an order
+  // which reflects the input order.
+
+  qsort(bp2d.regions, num_imgs, sizeof (struct RegionInfo),
+        cmp_region_info_by_named_surface_index);
+
   // check for errors, use ferror
   for (int i = 0; i < num_imgs; i++) {
     struct RegionInfo *reg = bp2d.regions+i;
