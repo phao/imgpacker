@@ -9,6 +9,7 @@
 #include "XFlow.h"
 #include "RegionInfo.h"
 #include "BinPack2D.h"
+#include "AU.h"
 
 /**
  * Leaf nodes have right == 0 and down == 0. Inner nodes have both not-null.
@@ -29,6 +30,11 @@ enum {
 
 #define assert_leaf_node(n) assert(is_leaf_node(n))
 #define assert_inner_node(n) assert(is_inner_node(n))
+
+struct Context {
+  AU_FixedSizeAllocator fsa;
+  struct BinPack2DOptions opts;
+};
 
 static inline int
 imax(int a, int b) {
@@ -58,8 +64,8 @@ maxside_named_surface_cmp(const void *a, const void *b) {
 }
 
 static struct TNode *
-leaf_node(int x, int y, int w, int h) {
-  struct TNode *n = malloc(sizeof (struct TNode));
+leaf_node(int x, int y, int w, int h, AU_FixedSizeAllocator *fsa) {
+  struct TNode *n = AU_FSA_Alloc(fsa);
   return_if(!n, 0);
 
   n->rect = (SDL_Rect) {x, y, w, h};
@@ -77,16 +83,18 @@ leaf_node(int x, int y, int w, int h) {
  * leaf node is returned. The given leaf node is freed on success.
  */
 static int
-split_leaf(struct TNode *n, int img_w, int img_h) {
+split_leaf(struct TNode *n, int img_w, int img_h, AU_FixedSizeAllocator *fsa) {
   assert_leaf_node(n);
   assert(n->rect.w >= img_w);
   assert(n->rect.h >= img_h);
 
   n->right = leaf_node(n->rect.x + img_w, n->rect.y,
-                       n->rect.w - img_w, img_h);
+                       n->rect.w - img_w, img_h,
+                       fsa);
   goto_if(!n->right, err);
   n->down = leaf_node(n->rect.x, n->rect.y + img_h,
-                      n->rect.w, n->rect.h - img_h);
+                      n->rect.w, n->rect.h - img_h,
+                      fsa);
   goto_if(!n->down, err);
 
   assert_inner_node(n);
@@ -94,8 +102,6 @@ split_leaf(struct TNode *n, int img_w, int img_h) {
   return 0;
 
  err:
-  free(n->right);
-  free(n->down);
   n->right = 0;
   n->down = 0;
   return -1;
@@ -105,7 +111,7 @@ static int
 try_insert(struct TNode **head,
            struct RegionInfo *region,
            struct NamedSurface *img,
-           struct BinPack2DOptions opts)
+           struct Context *cx)
 {
   if (is_leaf_node(*head)) {
     SDL_Rect *leaf_rect = &(**head).rect;
@@ -113,7 +119,8 @@ try_insert(struct TNode **head,
     int img_h = img->surf->h;
 
     if (leaf_rect->w >= img_w && leaf_rect->h >= img_h) {
-      return_if(split_leaf(*head, img_w, img_h) < 0, ATTEMPT_NO_MEM);
+      return_if(split_leaf(*head, img_w, img_h, &cx->fsa) < 0,
+                ATTEMPT_NO_MEM);
       region->img = img;
       region->rect = (SDL_Rect) {leaf_rect->x, leaf_rect->y, img_w, img_h};
       return ATTEMPT_OK;
@@ -125,11 +132,11 @@ try_insert(struct TNode **head,
   else {
     assert_inner_node(*head);
 
-    int attempt = try_insert(&(**head).right, region, img, opts);
+    int attempt = try_insert(&(**head).right, region, img, cx);
     return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM,
               attempt);
     assert(attempt == ATTEMPT_UNFIT);
-    attempt = try_insert(&(**head).down, region, img, opts);
+    attempt = try_insert(&(**head).down, region, img, cx);
     return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM,
               attempt);
     assert(attempt == ATTEMPT_UNFIT);
@@ -140,7 +147,8 @@ try_insert(struct TNode **head,
 static int
 grow_right_insert(struct TNode **head,
                   struct RegionInfo *region,
-                  struct NamedSurface *img)
+                  struct NamedSurface *img,
+                  AU_FixedSizeAllocator *fsa)
 {
   assert_inner_node(*head);
 
@@ -153,15 +161,15 @@ grow_right_insert(struct TNode **head,
   int img_h = img->surf->h;
   int new_w = img_w + head_w;
 
-  struct TNode *new_head = malloc(sizeof (struct TNode));
+  struct TNode *new_head = AU_FSA_Alloc(fsa);
   return_if(!new_head, ATTEMPT_NO_MEM);
-  struct TNode *right = leaf_node(head_x + head_w, head_y, img_w, head_h);
+  struct TNode *right = leaf_node(head_x + head_w, head_y,
+                                  img_w, head_h,
+                                  fsa);
   if (!right) {
-    free(new_head);
     return ATTEMPT_NO_MEM;
   }
-  if (split_leaf(right, img_w, img_h) < 0) {
-    free(new_head);
+  if (split_leaf(right, img_w, img_h, fsa) < 0) {
     return ATTEMPT_NO_MEM;
   }
   region->img = img;
@@ -176,7 +184,8 @@ grow_right_insert(struct TNode **head,
 static int
 grow_down_insert(struct TNode **head,
                  struct RegionInfo *region,
-                 struct NamedSurface *img)
+                 struct NamedSurface *img,
+                 AU_FixedSizeAllocator *fsa)
 {
   assert_inner_node(*head);
 
@@ -189,15 +198,15 @@ grow_down_insert(struct TNode **head,
   int img_h = img->surf->h;
   int new_h = img_h + head_h;
 
-  struct TNode *new_head = malloc(sizeof (struct TNode));
+  struct TNode *new_head = AU_FSA_Alloc(fsa);
   return_if(!new_head, ATTEMPT_NO_MEM);
-  struct TNode *down = leaf_node(head_x, head_y + head_h, head_w, img_h);
+  struct TNode *down = leaf_node(head_x, head_y + head_h,
+                                 head_w, img_h,
+                                 fsa);
   if (!down) {
-    free(new_head);
     return ATTEMPT_NO_MEM;
   }
-  if (split_leaf(down, img_w, img_h) < 0) {
-    free(new_head);
+  if (split_leaf(down, img_w, img_h, fsa) < 0) {
     return ATTEMPT_NO_MEM;
   }
   region->img = img;
@@ -213,12 +222,12 @@ static int
 grow_insert(struct TNode **head,
             struct RegionInfo *region,
             struct NamedSurface *img,
-            struct BinPack2DOptions opts)
+            struct Context *cx)
 {
   assert(img);
   assert(region);
-  assert(opts.w > 0);
-  assert(opts.h > 0);
+  assert(cx->opts.w > 0);
+  assert(cx->opts.h > 0);
   assert(*head);
 
   int img_w = img->surf->w;
@@ -232,38 +241,30 @@ grow_insert(struct TNode **head,
   assert(can_grow_down || can_grow_right);
 
   int should_grow_down = can_grow_down &&
-    (opts.w <= root_w + img_w || root_w > root_h) &&
-    root_h + img_h <= opts.h;
+    (cx->opts.w <= root_w + img_w || root_w > root_h) &&
+    root_h + img_h <= cx->opts.h;
   int should_grow_right = can_grow_right &&
-    (opts.h <= root_h + img_h || root_h > root_w) &&
-    root_w + img_w <= opts.w;
+    (cx->opts.h <= root_h + img_h || root_h > root_w) &&
+    root_w + img_w <= cx->opts.w;
 
-  return_if(should_grow_right, grow_right_insert(head, region, img));
-  return_if(should_grow_down, grow_down_insert(head, region, img));
-  return_if(can_grow_down, grow_down_insert(head, region, img));
+  AU_FixedSizeAllocator *fsa = &cx->fsa;
+  return_if(should_grow_right, grow_right_insert(head, region, img, fsa));
+  return_if(should_grow_down, grow_down_insert(head, region, img, fsa));
+  return_if(can_grow_down, grow_down_insert(head, region, img, fsa));
   assert(can_grow_right);
-  return grow_right_insert(head, region, img);
+  return grow_right_insert(head, region, img, fsa);
 }
 
 static int
 insert(struct TNode **head,
        struct RegionInfo *region,
        struct NamedSurface *img,
-       struct BinPack2DOptions opts)
+       struct Context *cx)
 {
-  int attempt = try_insert(head, region, img, opts);
+  int attempt = try_insert(head, region, img, cx);
   return_if(attempt == ATTEMPT_OK || attempt == ATTEMPT_NO_MEM, attempt);
   assert(attempt == ATTEMPT_UNFIT);
-  return grow_insert(head, region, img, opts);
-}
-
-static void
-free_tnode(struct TNode *n) {
-  if (n) {
-    free_tnode(n->down);
-    free_tnode(n->right);
-    free(n);
-  }
+  return grow_insert(head, region, img, cx);
 }
 
 struct BinPack2DResult
@@ -276,21 +277,29 @@ bin_pack_2d(struct NamedSurface *imgs,
   assert(opts.w > 0);
   assert(opts.h > 0);
 
-  errno = 0;
-
-  qsort(imgs, (size_t) num_imgs, sizeof (struct NamedSurface),
-    maxside_named_surface_cmp);
-
   struct BinPack2DResult result = {ATTEMPT_NO_MEM, 0, 0};
   struct TNode *head = 0;
+  struct Context cx = {.opts = opts};
 
-  result.regions = malloc((size_t) num_imgs * sizeof (struct RegionInfo));
+  goto_if(AU_FSA_Setup(&cx.fsa, sizeof (struct TNode), 1) < 0,
+          err);
+
+  errno = 0;
+
+  qsort(imgs, num_imgs, sizeof (struct NamedSurface),
+        maxside_named_surface_cmp);
+
+  /*
+   * Should the regions storage be a parameter?
+   */
+  result.regions = malloc(num_imgs * sizeof (struct RegionInfo));
+
   goto_if(!result.regions, err);
-  head = leaf_node(0, 0, imgs[0].surf->w, imgs[0].surf->h);
+  head = leaf_node(0, 0, imgs[0].surf->w, imgs[0].surf->h, &cx.fsa);
   goto_if(!head, err);
 
   for (int i = 0; i < num_imgs; i++) {
-    result.attempt = insert(&head, result.regions+i, imgs+i, opts);
+    result.attempt = insert(&head, result.regions+i, imgs+i, &cx);
     goto_if(result.attempt < 0, err);
   }
 
@@ -323,12 +332,14 @@ bin_pack_2d(struct NamedSurface *imgs,
   }
 
   result.attempt = ATTEMPT_OK;
-  free_tnode(head);
+  AU_FSA_Destroy(&cx.fsa);
   return result;
 
 err:
   assert(result.attempt < 0);
-  free_tnode(head);
+  if (head) {
+    AU_FSA_Destroy(&cx.fsa);
+  }
   if (result.img) {
     SDL_FreeSurface(result.img);
   }
